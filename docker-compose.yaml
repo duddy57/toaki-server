@@ -1,0 +1,23 @@
+services:
+  sperium_db:
+    image: postgres:18-alpine
+    ports:
+      - "5544:5432"
+    environment:
+      - POSTGRES_USER=${DB_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - sperium_db_data:/var/lib/postgresql
+  sperium_cache:
+    image: redis:7-alpine
+    ports:
+      - "6633:6379"
+    volumes:
+      - sperium_cache_data:/var/lib/redis
+
+
+
+volumes:
+  sperium_db_data:
+  sperium_cache_data:
