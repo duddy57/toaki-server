@@ -154,10 +154,10 @@ func (rs UsersResources) getLogout(c fuego.ContextNoBody) (shared.SuccessRespons
 		Message: "Até mais",
 	}, nil
 }
-func (rs UsersResources) getUser(c fuego.ContextNoBody) (User, error) {
+func (rs UsersResources) getUser(c fuego.ContextNoBody) (Users, error) {
 	user, err := rs.UsersService.GetUser(c.Context())
 	if err != nil {
-		return User{}, err
+		return Users{}, err
 	}
 
 	return user, err

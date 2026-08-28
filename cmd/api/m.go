@@ -15,7 +15,9 @@ import (
 	"github.com/alexedwards/scs/goredisstore"
 	"github.com/alexedwards/scs/v2"
 	"github.com/duddy57/toaki-server/internal/config"
+	"github.com/duddy57/toaki-server/internal/members"
 	"github.com/duddy57/toaki-server/internal/shared"
+	"github.com/duddy57/toaki-server/internal/tenants"
 	"github.com/duddy57/toaki-server/internal/users"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/cors"
@@ -90,7 +92,7 @@ func run(ctx context.Context) error {
 		return err
 	}
 
-	err = db.AutoMigrate(&users.User{})
+	err = db.AutoMigrate(&users.Users{}, &tenants.Organizations{}, &members.Member{})
 	if err != nil {
 		return err
 	}
