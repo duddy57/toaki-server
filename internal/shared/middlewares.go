@@ -24,6 +24,6 @@ func AuthMiddleware(sessionManager *scs.SessionManager) func(http.Handler) http.
 
 func ForTenant(tenantID uuid.UUID) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		return db.Where("tenant_id = ?", tenantID)
+		return db.Where("organizations.id = ?", tenantID)
 	}
 }

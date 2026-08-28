@@ -12,6 +12,7 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 	"github.com/duddy57/toaki-server/internal/shared"
+	"github.com/duddy57/toaki-server/internal/tenants"
 	"github.com/go-fuego/fuego"
 	"github.com/redis/go-redis/v9"
 	oopszap "github.com/samber/oops/loggers/zap"
@@ -83,13 +84,13 @@ func (u *ServiceImpl) ResetPassword(ctx context.Context, resetToken string, body
 
 	hash := argon2.IDKey([]byte(body.Password), salt, iterations, memory, parallelism, keyLength)
 	if err := u.db.WithContext(ctx).
-		Model(&User{}).
+		Model(&Users{}).
 		Where("id = ?", parsedUserID).
 		Updates(map[string]any{
 			"password": hash,
 			"salt":     salt,
 		}).Error; err != nil {
-		u.l.Error("Failed to update user password",
+		u.l.Error("Failed to update Users password",
 			zap.Object("error", oopszap.OopsMarshalFunc(err)),
 			zap.String("stacktrace", oopszap.OopsStackMarshaller(err)),
 		)
@@ -99,7 +100,7 @@ func (u *ServiceImpl) ResetPassword(ctx context.Context, resetToken string, body
 				Detail: "Não foi possível encontrar a conta informada",
 			}
 		}
-		
+
 		return fuego.InternalServerError{
 			Err:    err,
 			Title:  "Internal Server Error",
@@ -110,7 +111,6 @@ func (u *ServiceImpl) ResetPassword(ctx context.Context, resetToken string, body
 
 	return nil
 }
-
 func (u *ServiceImpl) CreateUsers(ctx context.Context, body CreateUserRequest) (uuid.UUID, error) {
 	salt := make([]byte, saltLength)
 	if _, err := rand.Read(salt); err != nil {
@@ -127,14 +127,14 @@ func (u *ServiceImpl) CreateUsers(ctx context.Context, body CreateUserRequest) (
 	}
 	hash := argon2.IDKey([]byte(body.Password), salt, iterations, memory, parallelism, keyLength)
 
-	user := User{
+	Users := Users{
 		Name:     body.Name,
 		Email:    body.Email,
 		Password: hash,
 		Salt:     salt,
 	}
-	if err := u.db.WithContext(ctx).Create(&user).Error; err != nil {
-		u.l.Error("Failed to create user",
+	if err := u.db.WithContext(ctx).Create(&Users).Error; err != nil {
+		u.l.Error("Failed to create Users",
 			zap.Object("error", oopszap.OopsMarshalFunc(err)),
 			zap.String("stacktrace", oopszap.OopsStackMarshaller(err)),
 		)
@@ -146,12 +146,12 @@ func (u *ServiceImpl) CreateUsers(ctx context.Context, body CreateUserRequest) (
 		}
 	}
 
-	return user.Base.ID, nil
+	return Users.Base.ID, nil
 }
 func (u *ServiceImpl) LoginUsers(ctx context.Context, body LoginRequest) error {
-	var user User
-	if err := u.db.WithContext(ctx).Where("email = ?", body.Email).First(&user).Error; err != nil {
-		u.l.Error("Failed to get user",
+	var Users Users
+	if err := u.db.WithContext(ctx).Where("email = ?", body.Email).First(&Users).Error; err != nil {
+		u.l.Error("Failed to get Users",
 			zap.Object("error", oopszap.OopsMarshalFunc(err)),
 			zap.String("stacktrace", oopszap.OopsStackMarshaller(err)),
 		)
@@ -171,9 +171,9 @@ func (u *ServiceImpl) LoginUsers(ctx context.Context, body LoginRequest) error {
 		}
 	}
 
-	ok, err := verifyPassword(body.Password, user.Password, user.Salt)
+	ok, err := verifyPassword(body.Password, Users.Password, Users.Salt)
 	if err != nil {
-		u.l.Error("Failed to get user",
+		u.l.Error("Failed to get Users",
 			zap.Object("error", oopszap.OopsMarshalFunc(err)),
 			zap.String("stacktrace", oopszap.OopsStackMarshaller(err)),
 		)
@@ -186,7 +186,7 @@ func (u *ServiceImpl) LoginUsers(ctx context.Context, body LoginRequest) error {
 	}
 
 	if !ok {
-		u.l.Error("Failed to get user",
+		u.l.Error("Failed to get Users",
 			zap.Object("error", oopszap.OopsMarshalFunc(err)),
 			zap.String("stacktrace", oopszap.OopsStackMarshaller(err)),
 		)
@@ -209,7 +209,7 @@ func (u *ServiceImpl) LoginUsers(ctx context.Context, body LoginRequest) error {
 		}
 	}
 
-	u.session.Put(ctx, "user_id", user.ID)
+	u.session.Put(ctx, "user_id", Users.ID)
 
 	return nil
 }
@@ -228,33 +228,33 @@ func (u *ServiceImpl) LogoutUsers(ctx context.Context) error {
 
 	return nil
 }
-func (u *ServiceImpl) GetUser(ctx context.Context) (User, error) {
+func (u *ServiceImpl) GetUser(ctx context.Context) (Users, error) {
 	userID, ok := u.session.Get(ctx, "user_id").(uuid.UUID)
 	if !ok {
-		u.l.Error("failed to get user id", zap.Error(errors.New("failed to get user id")))
-		return User{}, fuego.UnauthorizedError{
-			Err:    errors.New("user not found"),
+		u.l.Error("failed to get Users id", zap.Error(errors.New("failed to get Users id")))
+		return Users{}, fuego.UnauthorizedError{
+			Err:    errors.New("Users not found"),
 			Title:  "Unauthorized",
 			Status: http.StatusUnauthorized,
 			Detail: "Ops! você precisa esta autenticado",
 		}
 	}
 
-	var user User
-	if err := u.db.WithContext(ctx).Where("id = ?", userID).First(&user).Error; err != nil {
-		u.l.Error("Failed to get user",
+	var UsersModel Users
+	if err := u.db.WithContext(ctx).Where("id = ?", userID).First(&UsersModel).Error; err != nil {
+		u.l.Error("Failed to get Users",
 			zap.Object("error", oopszap.OopsMarshalFunc(err)),
 			zap.String("stacktrace", oopszap.OopsStackMarshaller(err)),
 		)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return User{}, fuego.NotFoundError{
+			return Users{}, fuego.NotFoundError{
 				Err:    err,
 				Title:  "Not Found",
 				Status: http.StatusNotFound,
 				Detail: "Credenciais invalidas",
 			}
 		}
-		return User{}, fuego.InternalServerError{
+		return Users{}, fuego.InternalServerError{
 			Err:    err,
 			Title:  "Internal Server Error",
 			Status: http.StatusInternalServerError,
@@ -262,31 +262,58 @@ func (u *ServiceImpl) GetUser(ctx context.Context) (User, error) {
 		}
 	}
 
-	return User{
-		ID: user.ID,
+	var organization tenants.Organizations
+	if err := u.db.WithContext(ctx).
+		Model(&tenants.Organizations{}).
+		Joins("JOIN members ON members.organization_id = organizations.id").
+		Where("members.user_id = ?", userID).
+		First(&organization).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			u.l.Error("Failed to get Users organization",
+				zap.Object("error", oopszap.OopsMarshalFunc(err)),
+				zap.String("stacktrace", oopszap.OopsStackMarshaller(err)),
+			)
+			return Users{}, fuego.InternalServerError{
+				Err:    err,
+				Title:  "Internal Server Error",
+				Status: http.StatusInternalServerError,
+				Detail: "Ops! algo deu errado, tente novamente mais tarde",
+			}
+		}
+	}
 
-		Name:  user.Name,
-		Email: user.Email,
+	return Users{
+		Base: UsersModel.Base,
 
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
+		Name:  UsersModel.Name,
+		Email: UsersModel.Email,
+
+		Tenant: organizationOrNil(organization),
 	}, nil
 
 }
+
+func organizationOrNil(organization tenants.Organizations) *tenants.Organizations {
+	if organization.ID == uuid.Nil() {
+		return nil
+	}
+	return &organization
+}
+
 func (u *ServiceImpl) DeleteUsers(ctx context.Context) error {
 	userID, ok := u.session.Get(ctx, "user_id").(uuid.UUID)
 	if !ok {
-		u.l.Error("failed to get user id", zap.Error(errors.New("failed to get user id")))
+		u.l.Error("failed to get Users id", zap.Error(errors.New("failed to get Users id")))
 		return fuego.UnauthorizedError{
-			Err:    errors.New("user not found"),
+			Err:    errors.New("Users not found"),
 			Title:  "Unauthorized",
 			Status: http.StatusUnauthorized,
 			Detail: "Ops! você precisa esta autenticado",
 		}
 	}
 
-	if err := u.db.WithContext(ctx).Where("id = ?", userID).Delete(&User{}).Error; err != nil {
-		u.l.Error("Failed to get user",
+	if err := u.db.WithContext(ctx).Where("id = ?", userID).Delete(&Users{}).Error; err != nil {
+		u.l.Error("Failed to get Users",
 			zap.Object("error", oopszap.OopsMarshalFunc(err)),
 			zap.String("stacktrace", oopszap.OopsStackMarshaller(err)),
 		)
@@ -311,17 +338,17 @@ func (u *ServiceImpl) DeleteUsers(ctx context.Context) error {
 func (u *ServiceImpl) UpdateUsers(ctx context.Context, body UpdateRequest) error {
 	userID, ok := u.session.Get(ctx, "user_id").(uuid.UUID)
 	if !ok {
-		u.l.Error("failed to get user id", zap.Error(errors.New("failed to get user id")))
+		u.l.Error("failed to get Users id", zap.Error(errors.New("failed to get Users id")))
 		return fuego.UnauthorizedError{
-			Err:    errors.New("user not found"),
+			Err:    errors.New("Users not found"),
 			Title:  "Unauthorized",
 			Status: http.StatusUnauthorized,
 			Detail: "Ops! você precisa esta autenticado",
 		}
 	}
 
-	if err := u.db.WithContext(ctx).Model(&User{}).Where("id = ?", userID).Updates(body).Error; err != nil {
-		u.l.Error("Failed to get user",
+	if err := u.db.WithContext(ctx).Model(&Users{}).Where("id = ?", userID).Updates(body).Error; err != nil {
+		u.l.Error("Failed to get Users",
 			zap.Object("error", oopszap.OopsMarshalFunc(err)),
 			zap.String("stacktrace", oopszap.OopsStackMarshaller(err)),
 		)
@@ -344,10 +371,10 @@ func (u *ServiceImpl) UpdateUsers(ctx context.Context, body UpdateRequest) error
 	return nil
 }
 func (u *ServiceImpl) RequestPasswordReset(ctx context.Context, body RequestUpdatePassword) error {
-	var user User
+	var Users Users
 
-	if err := u.db.WithContext(ctx).Where("email = ?", body.Email).First(&user).Error; err != nil {
-		u.l.Error("failed to get user id", zap.Error(errors.New("failed to get user id")))
+	if err := u.db.WithContext(ctx).Where("email = ?", body.Email).First(&Users).Error; err != nil {
+		u.l.Error("failed to get Users id", zap.Error(errors.New("failed to get Users id")))
 
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil
@@ -364,8 +391,8 @@ func (u *ServiceImpl) RequestPasswordReset(ctx context.Context, body RequestUpda
 	expireTime := 5 * time.Minute
 
 	tokenKey := fmt.Sprintf("reset_token::%s", resetToken.String())
-	if err := u.red.Set(ctx, tokenKey, user.ID.String(), expireTime).Err(); err != nil {
-		u.l.Error("failed to generate user reset token", zap.Error(err), zap.String("stacktrace", oopszap.OopsStackMarshaller(err)))
+	if err := u.red.Set(ctx, tokenKey, Users.ID.String(), expireTime).Err(); err != nil {
+		u.l.Error("failed to generate Users reset token", zap.Error(err), zap.String("stacktrace", oopszap.OopsStackMarshaller(err)))
 		return fuego.InternalServerError{
 			Err:    err,
 			Title:  "Internal Server Error",
@@ -377,8 +404,8 @@ func (u *ServiceImpl) RequestPasswordReset(ctx context.Context, body RequestUpda
 	resetURL := fmt.Sprintf("%s/api/reset_password?token=%s", u.webUrl, resetToken.String())
 
 	payload := shared.ResetPasswordData{
-		To:           user.Email,
-		Name:         user.Name,
+		To:           Users.Email,
+		Name:         Users.Name,
 		RedirectLink: resetURL,
 		ExpiresIn:    "5 minutos",
 	}
